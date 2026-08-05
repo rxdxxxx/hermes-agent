@@ -412,3 +412,56 @@ export const isVoiceToggleKey = (
       return key.super === true && !key.ctrl && !key.alt && !key.meta
   }
 }
+
+// --- Interrupt key (display.interrupt_key) ---
+
+export type ParsedInterruptKey = ParsedVoiceRecordKey
+
+export const DEFAULT_INTERRUPT_KEY: ParsedInterruptKey = {
+  ch: '',
+  mod: 'ctrl',
+  named: 'escape',
+  raw: 'escape'
+}
+
+export const parseInterruptKey = (raw: unknown): ParsedInterruptKey => {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return DEFAULT_INTERRUPT_KEY
+  }
+
+  const normalized = raw.trim().toLowerCase()
+
+  if (normalized === 'escape' || normalized === 'esc') {
+    return DEFAULT_INTERRUPT_KEY
+  }
+
+  // Delegate to the voice key parser — identical shape (mod+key).
+  // If it produces the default voice key it means parsing failed; fall back.
+  const parsed = parseVoiceRecordKey(normalized)
+
+  if (parsed.raw === DEFAULT_VOICE_RECORD_KEY.raw && normalized !== DEFAULT_VOICE_RECORD_KEY.raw) {
+    return DEFAULT_INTERRUPT_KEY
+  }
+
+  return parsed
+}
+
+export const isInterruptKey = (
+  key: RuntimeKeyEvent,
+  ch: string,
+  configured: ParsedInterruptKey = DEFAULT_INTERRUPT_KEY
+): boolean => {
+  if (configured.raw === 'escape') {
+    return !!key.escape && !key.ctrl && !key.alt && key.super !== true && !key.shift
+  }
+
+  return isVoiceToggleKey(key, ch, configured)
+}
+
+export const formatInterruptKey = (parsed: ParsedInterruptKey): string => {
+  if (parsed.raw === 'escape') {
+    return 'Esc'
+  }
+
+  return formatVoiceRecordKey(parsed)
+}

@@ -4,7 +4,13 @@ import { useEffect, useRef } from 'react'
 import { resolveDetailsMode, resolveSections } from '../domain/details.js'
 import type { GatewayClient } from '../gatewayClient.js'
 import type { ConfigFullResponse, ConfigMtimeResponse, ReloadMcpResponse } from '../gatewayTypes.js'
-import { DEFAULT_VOICE_RECORD_KEY, type ParsedVoiceRecordKey, parseVoiceRecordKey } from '../lib/platform.js'
+import {
+  DEFAULT_VOICE_RECORD_KEY,
+  type ParsedInterruptKey,
+  type ParsedVoiceRecordKey,
+  parseInterruptKey,
+  parseVoiceRecordKey
+} from '../lib/platform.js'
 import { asRpcResult } from '../lib/rpc.js'
 
 import { applyConfiguredTuiTheme } from './createGatewayEventHandler.js'
@@ -239,10 +245,11 @@ const _pasteCollapseCharsFromConfig = (cfg: ConfigFullResponse | null): number =
 export async function hydrateFullConfig(
   gw: GatewayClient,
   setBell: (v: boolean) => void,
-  setVoiceRecordKey?: (v: ParsedVoiceRecordKey) => void
+  setVoiceRecordKey?: (v: ParsedVoiceRecordKey) => void,
+  setInterruptKey?: (v: ParsedInterruptKey) => void
 ): Promise<ConfigFullResponse | null> {
   const cfg = await quietRpc<ConfigFullResponse>(gw, 'config.get', { key: 'full' })
-  applyDisplay(cfg, setBell, setVoiceRecordKey)
+  applyDisplay(cfg, setBell, setVoiceRecordKey, setInterruptKey)
 
   return cfg
 }
@@ -250,7 +257,8 @@ export async function hydrateFullConfig(
 export const applyDisplay = (
   cfg: ConfigFullResponse | null,
   setBell: (v: boolean) => void,
-  setVoiceRecordKey?: (v: ParsedVoiceRecordKey) => void
+  setVoiceRecordKey?: (v: ParsedVoiceRecordKey) => void,
+  setInterruptKey?: (v: ParsedInterruptKey) => void
 ) => {
   const d = cfg?.config?.display ?? {}
 
@@ -267,6 +275,11 @@ export const applyDisplay = (
   // the last-good state and lets the next successful poll refresh it.
   if (setVoiceRecordKey && cfg) {
     setVoiceRecordKey(_voiceRecordKeyFromConfig(cfg))
+  }
+
+  if (setInterruptKey && cfg) {
+    const raw = cfg?.config?.display?.interrupt_key
+    setInterruptKey(parseInterruptKey(raw))
   }
 
   patchUiState({
@@ -291,6 +304,7 @@ export const applyDisplay = (
 export function useConfigSync({
   gw,
   setBellOnComplete,
+  setInterruptKey,
   setVoiceEnabled,
   setVoiceRecordKey,
   sid
@@ -316,8 +330,8 @@ export function useConfigSync({
       // mcp_rev) look like an MCP change and fire a needless reload.mcp.
       mcpRevRef.current.accepted = String(r?.mcp_rev ?? '')
     })
-    void hydrateFullConfig(gw, setBellOnComplete, setVoiceRecordKey)
-  }, [gw, setBellOnComplete, setVoiceEnabled, setVoiceRecordKey, sid])
+    void hydrateFullConfig(gw, setBellOnComplete, setVoiceRecordKey, setInterruptKey)
+  }, [gw, setBellOnComplete, setInterruptKey, setVoiceEnabled, setVoiceRecordKey, sid])
 
   useEffect(() => {
     if (!sid) {
@@ -364,7 +378,7 @@ export function useConfigSync({
           )
         }
 
-        void hydrateFullConfig(gw, setBellOnComplete, setVoiceRecordKey)
+        void hydrateFullConfig(gw, setBellOnComplete, setVoiceRecordKey, setInterruptKey)
       })
     }, MTIME_POLL_MS)
 
@@ -375,6 +389,7 @@ export function useConfigSync({
 export interface UseConfigSyncOptions {
   gw: GatewayClient
   setBellOnComplete: (v: boolean) => void
+  setInterruptKey?: (v: ParsedInterruptKey) => void
   setVoiceEnabled: (v: boolean) => void
   setVoiceRecordKey?: (v: ParsedVoiceRecordKey) => void
   sid: null | string
